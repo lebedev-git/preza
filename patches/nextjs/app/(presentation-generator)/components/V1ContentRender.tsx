@@ -486,6 +486,10 @@ const VerbatimImportFallback = ({ data, density }: { data: any; density: string 
     const showRoadmap = !table && roadmapItems.length >= 2;
     const showSectionDeck = !showRoadmap && !table && sections.length >= 2;
     const showBalancedSectionCards = showSectionDeck && numberedSections.length >= 2 && numberedSections.length <= 4;
+    const compactNumberedSections = showBalancedSectionCards
+        && fullText.length <= 980
+        && sections.every((section) => section.lines.length <= 4)
+        && sections.every((section) => stringifyLayoutValue(section.heading).length <= 110);
     const showChart = !showRoadmap && !showSectionDeck && !table && chartPoints.length >= 3 && (family === "chart" || detectedFamily === "chart");
     const showMetrics = !showChart && !showRoadmap && !showSectionDeck && !table && metrics.length >= 3 && metrics.length <= 6 && fullText.length < 760;
     const showBulletGrid = !showMetrics && !showSectionDeck && family === "bullet" && (bullets.length > 0 || bodyLines.length >= 3);
@@ -583,11 +587,11 @@ const VerbatimImportFallback = ({ data, density }: { data: any; density: string 
                         ) : null}
                     </div>
                 ) : showBalancedSectionCards ? (
-                    <div className={`grid min-h-0 h-full flex-1 auto-rows-fr gap-4 ${sections.length === 2 ? "grid-cols-2" : sections.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+                    <div className={`grid min-h-0 gap-4 ${compactNumberedSections ? "content-start auto-rows-max self-start" : "h-full flex-1 auto-rows-fr"} ${sections.length === 2 ? "grid-cols-2" : sections.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
                         {sections.map((section, index) => {
                             const accent = roadmapPalette[index % roadmapPalette.length];
                             return (
-                                <div key={`${section.heading}-${index}`} className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#d4d4d8] bg-white p-5 shadow-[0_12px_30px_rgba(24,24,27,0.05)]">
+                                <div key={`${section.heading}-${index}`} className={`relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#d4d4d8] bg-white p-5 shadow-[0_12px_30px_rgba(24,24,27,0.05)] ${compactNumberedSections ? "self-start" : ""}`}>
                                     <div className="absolute left-0 top-0 h-full w-1.5" style={{ backgroundColor: accent }} />
                                     <div className="mb-4 flex items-start gap-3 pl-2">
                                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-[15px] font-semibold text-white" style={{ backgroundColor: accent }}>
@@ -595,7 +599,7 @@ const VerbatimImportFallback = ({ data, density }: { data: any; density: string 
                                         </div>
                                         <h3 className="min-w-0 text-[18px] font-semibold leading-[1.12] text-[#18181b]">{section.heading}</h3>
                                     </div>
-                                    <div className="min-h-0 space-y-2 overflow-hidden pl-2">
+                                    <div className={`min-h-0 space-y-2 pl-2 ${compactNumberedSections ? "" : "overflow-hidden"}`}>
                                         {section.lines.map((line, lineIndex) => (
                                             <p key={lineIndex} className={`${sectionTextClass} text-[#3f3f46]`}>
                                                 {line}
