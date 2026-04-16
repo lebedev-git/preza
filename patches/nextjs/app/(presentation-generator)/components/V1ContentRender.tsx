@@ -207,6 +207,9 @@ type VerbatimSection = {
     lines: string[];
 };
 
+const sectionCardVisualWeight = (section: VerbatimSection) =>
+    section.heading.length + section.lines.reduce((sum, line) => sum + line.length, 0);
+
 const parseNumberedSections = (bodyLines: string[]): VerbatimSection[] => {
     const sections: VerbatimSection[] = [];
     let current: VerbatimSection | null = null;
@@ -448,9 +451,9 @@ const getBodyClass = (density: string, textLength: number) => {
 };
 
 const getHeadingClass = (density: string, titleLength: number) => {
-    if (density === "dense" || titleLength > 88) return "text-[clamp(28px,3.2vw,40px)] leading-[1.04]";
-    if (density === "medium" || titleLength > 58) return "text-[clamp(32px,3.4vw,44px)] leading-[1.04]";
-    return "text-[clamp(36px,3.8vw,48px)] leading-[1.02]";
+    if (density === "dense" || titleLength > 88) return "text-[clamp(34px,3.5vw,46px)] leading-[1.03]";
+    if (density === "medium" || titleLength > 58) return "text-[clamp(40px,4vw,54px)] leading-[1.03]";
+    return "text-[clamp(48px,4.8vw,64px)] leading-[1.01]";
 };
 
 const VerbatimImportFallback = ({ data, density }: { data: any; density: string }) => {
@@ -484,12 +487,24 @@ const VerbatimImportFallback = ({ data, density }: { data: any; density: string 
     const chartMaxValue = Math.max(...chartPoints.map((point) => Math.abs(point.value)), 1);
     const [leftColumn, rightColumn] = splitBalancedColumns(paragraphs);
     const showRoadmap = !table && roadmapItems.length >= 2;
+    const isCoverSlide = family === "cover";
+    const isDenseRoadmap = showRoadmap && (fullText.length > 1200 || roadmapItems.length > 5);
     const showSectionDeck = !showRoadmap && !table && sections.length >= 2;
     const showBalancedSectionCards = showSectionDeck && numberedSections.length >= 2 && numberedSections.length <= 4;
-    const compactNumberedSections = showBalancedSectionCards
-        && fullText.length <= 980
-        && sections.every((section) => section.lines.length <= 4)
-        && sections.every((section) => stringifyLayoutValue(section.heading).length <= 110);
+    const numberedSectionWeights = sections.map(sectionCardVisualWeight);
+    const numberedSectionImbalance = numberedSectionWeights.length
+        ? Math.max(...numberedSectionWeights) / Math.max(Math.min(...numberedSectionWeights), 1)
+        : 1;
+    const compactNumberedSections = showBalancedSectionCards && (
+        sections.length <= 3
+        || (
+            fullText.length <= 980
+            && sections.every((section) => section.lines.length <= 4)
+            && sections.every((section) => stringifyLayoutValue(section.heading).length <= 110)
+            && numberedSectionImbalance <= 2.6
+        )
+    );
+    const compactSectionDeck = showSectionDeck && sections.length <= 3 && fullText.length < 1700;
     const showChart = !showRoadmap && !showSectionDeck && !table && chartPoints.length >= 3 && (family === "chart" || detectedFamily === "chart");
     const showMetrics = !showChart && !showRoadmap && !showSectionDeck && !table && metrics.length >= 3 && metrics.length <= 6 && fullText.length < 760;
     const showBulletGrid = !showMetrics && !showSectionDeck && family === "bullet" && (bullets.length > 0 || bodyLines.length >= 3);
@@ -504,8 +519,10 @@ const VerbatimImportFallback = ({ data, density }: { data: any; density: string 
     const roadmapGridClass = roadmapItems.length <= 2
         ? "grid-cols-2"
         : "grid-cols-3";
-    const roadmapTextClass = roadmapItems.length > 4 || fullText.length > 900
-        ? "text-[12px] leading-[1.28]"
+    const roadmapTextClass = isDenseRoadmap
+        ? "text-[11px] leading-[1.2]"
+        : roadmapItems.length > 4 || fullText.length > 900
+        ? "text-[12px] leading-[1.26]"
         : "text-[13px] leading-[1.34]";
     const roadmapPalette = ["#0f766e", "#1d4ed8", "#be123c", "#ca8a04", "#6d28d9", "#15803d"];
     const sectionTextClass = fullText.length > 1050
@@ -514,8 +531,22 @@ const VerbatimImportFallback = ({ data, density }: { data: any; density: string 
             ? "text-[14px] leading-[1.34]"
             : "text-[15px] leading-[1.4]";
     const sourceSlideNumber = Number(data.__source_slide_number__ ?? continuationPart + 1);
-    const showGhostNumeral = continuationPart === 0 && (family === "cover" || (fullText.length <= 220 && sections.length <= 1));
+    const showGhostNumeral = continuationPart === 0 && (isCoverSlide || (fullText.length <= 220 && sections.length <= 1));
     const ghostNumeral = String(Number.isFinite(sourceSlideNumber) ? sourceSlideNumber : continuationPart + 1).padStart(2, "0");
+    const frameClass = isCoverSlide
+        ? "flex h-full flex-col justify-center gap-8 px-[70px] py-[58px]"
+        : isDenseRoadmap
+            ? "flex h-full flex-col gap-3 px-[52px] py-[32px]"
+            : "flex h-full flex-col gap-5 px-[58px] py-[42px]";
+    const headerClass = isCoverSlide
+        ? "flex flex-col items-start gap-6"
+        : "flex items-start justify-between gap-6";
+    const titleWrapClass = isCoverSlide
+        ? "min-w-0 max-w-[88%]"
+        : isDenseRoadmap
+            ? "min-w-0 max-w-[92%]"
+            : "min-w-0 max-w-[78%]";
+    const contentFrameClass = isCoverSlide ? "flex-none" : "min-h-0 flex-1";
 
     return (
         <div className="relative h-full w-full overflow-hidden bg-[linear-gradient(135deg,#fafafa_0%,#f4f4f5_55%,#eef6f5_100%)] text-[#18181b]">
@@ -525,9 +556,9 @@ const VerbatimImportFallback = ({ data, density }: { data: any; density: string 
                     {ghostNumeral}
                 </div>
             ) : null}
-            <div className="flex h-full flex-col gap-5 px-[58px] py-[42px]">
-                <div className="flex items-start justify-between gap-6">
-                    <div className="min-w-0 max-w-[78%]">
+            <div className={frameClass}>
+                <div className={headerClass}>
+                    <div className={titleWrapClass}>
                         <div className="mb-4 h-1 w-16 rounded-full bg-[#0f766e]/35" />
                         <h1 className={`${headingClass} font-semibold tracking-normal text-balance`}>
                             {title || "Untitled slide"}
@@ -540,19 +571,19 @@ const VerbatimImportFallback = ({ data, density }: { data: any; density: string 
                     ) : null}
                 </div>
 
-                <div className="min-h-[70vh] flex-1">
+                <div className={contentFrameClass}>
                 {showRoadmap ? (
-                    <div className="flex min-h-0 h-full flex-1 flex-col gap-4">
-                        <div className={`grid min-h-0 flex-1 auto-rows-fr ${roadmapGridClass} gap-4`}>
+                    <div className={`flex min-h-0 h-full flex-1 flex-col ${isDenseRoadmap ? "gap-2" : "gap-4"}`}>
+                        <div className={`grid min-h-0 flex-1 auto-rows-fr ${roadmapGridClass} ${isDenseRoadmap ? "gap-2" : "gap-4"}`}>
                             {roadmapItems.map((item, index) => {
                                 const accent = roadmapPalette[index % roadmapPalette.length];
                                 return (
-                                    <div key={`${item.marker}-${index}`} className="relative min-h-0 overflow-hidden rounded-2xl border border-[#d4d4d8] bg-white p-5 shadow-[0_12px_30px_rgba(24,24,27,0.05)]">
+                                    <div key={`${item.marker}-${index}`} className={`relative min-h-0 overflow-hidden rounded-2xl border border-[#d4d4d8] bg-white shadow-[0_12px_30px_rgba(24,24,27,0.05)] ${isDenseRoadmap ? "p-3" : "p-5"}`}>
                                         <div className="absolute left-0 top-0 h-full w-1.5" style={{ backgroundColor: accent }} />
-                                        <div className="mb-3 flex items-start justify-between gap-3 pl-2">
+                                        <div className={`${isDenseRoadmap ? "mb-2" : "mb-3"} flex items-start justify-between gap-3 pl-2`}>
                                             <div className="min-w-0">
                                                 <p className={`mb-1 ${kickerClass}`} style={{ color: accent }}>{item.marker}</p>
-                                                <h3 className="text-[18px] font-semibold leading-[1.12] text-[#18181b]">{item.heading}</h3>
+                                                <h3 className={`${isDenseRoadmap ? "text-[15px] leading-[1.08]" : "text-[19px] leading-[1.12]"} font-semibold text-[#18181b]`}>{item.heading}</h3>
                                             </div>
                                             {item.amount || item.dateHint ? (
                                                 <div className="shrink-0 space-y-1 text-right">
@@ -561,7 +592,7 @@ const VerbatimImportFallback = ({ data, density }: { data: any; density: string 
                                                 </div>
                                             ) : null}
                                         </div>
-                                        <div className="space-y-1.5 pl-2">
+                                        <div className={`${isDenseRoadmap ? "space-y-1" : "space-y-1.5"} pl-2`}>
                                             {item.details.map((detail, detailIndex) => (
                                                 <p key={detailIndex} className={`${roadmapTextClass} text-[#3f3f46]`}>
                                                     {detail}
@@ -587,11 +618,11 @@ const VerbatimImportFallback = ({ data, density }: { data: any; density: string 
                         ) : null}
                     </div>
                 ) : showBalancedSectionCards ? (
-                    <div className={`grid min-h-0 gap-4 ${compactNumberedSections ? "content-start auto-rows-max self-start" : "h-full flex-1 auto-rows-fr"} ${sections.length === 2 ? "grid-cols-2" : sections.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+                    <div className={`grid min-h-0 gap-4 ${compactNumberedSections ? "h-full flex-1 content-center auto-rows-max" : "h-full flex-1 auto-rows-fr"} ${sections.length === 2 ? "grid-cols-2 items-center" : sections.length === 3 ? "grid-cols-3 items-center" : "grid-cols-2"}`}>
                         {sections.map((section, index) => {
                             const accent = roadmapPalette[index % roadmapPalette.length];
                             return (
-                                <div key={`${section.heading}-${index}`} className={`relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#d4d4d8] bg-white p-5 shadow-[0_12px_30px_rgba(24,24,27,0.05)] ${compactNumberedSections ? "self-start" : ""}`}>
+                                <div key={`${section.heading}-${index}`} className={`relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#d4d4d8] bg-white p-5 shadow-[0_12px_30px_rgba(24,24,27,0.05)] ${compactNumberedSections ? "self-center" : ""}`}>
                                     <div className="absolute left-0 top-0 h-full w-1.5" style={{ backgroundColor: accent }} />
                                     <div className="mb-4 flex items-start gap-3 pl-2">
                                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-[15px] font-semibold text-white" style={{ backgroundColor: accent }}>
@@ -611,33 +642,19 @@ const VerbatimImportFallback = ({ data, density }: { data: any; density: string 
                         })}
                     </div>
                 ) : showSectionDeck ? (
-                    <div className="grid min-h-0 flex-1 grid-cols-[0.72fr_1.28fr] gap-6">
-                        <div className="relative flex min-h-0 flex-col justify-between overflow-hidden rounded-2xl bg-[#18181b] p-6 text-white">
-                            <div>
-                                <div className="mb-5 h-1 w-24 rounded-full bg-[#0f766e]" />
-                                <h2 className="text-[27px] font-semibold leading-[1.08] text-balance">{title || "Imported slide"}</h2>
-                            </div>
-                            <div className="mt-6 grid grid-cols-2 gap-3">
-                                {sections.slice(0, 4).map((section, index) => (
-                                    <div key={`${section.heading}-${index}`} className="border-t border-white/20 pt-3">
-                                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#99f6e4]">0{index + 1}</p>
-                                        <p className="mt-1 text-[13px] font-medium leading-[1.24] text-white/80">{section.heading}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className={`grid min-h-0 auto-rows-fr gap-3 ${sections.length <= 2 ? "grid-cols-2" : "grid-cols-2"}`}>
+                    <div className={`grid min-h-0 flex-1 gap-4 ${compactSectionDeck ? "content-center auto-rows-max" : "auto-rows-fr"} ${sections.length === 2 ? "grid-cols-2" : sections.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
                             {sections.map((section, index) => {
                                 const accent = roadmapPalette[index % roadmapPalette.length];
                                 return (
-                                    <div key={`${section.heading}-${index}`} className="relative min-h-0 overflow-hidden rounded-xl border border-[#d4d4d8] bg-white p-4">
+                                    <div key={`${section.heading}-${index}`} className="relative min-h-0 overflow-hidden rounded-2xl border border-[#d4d4d8] bg-white p-5 shadow-[0_12px_30px_rgba(24,24,27,0.05)]">
+                                        <div className="absolute left-0 top-0 h-full w-1.5" style={{ backgroundColor: accent }} />
                                         <div className="mb-3 flex items-center gap-3">
                                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[12px] font-semibold text-white" style={{ backgroundColor: accent }}>
                                                 {index + 1}
                                             </div>
-                                            <h3 className="text-[16px] font-semibold leading-[1.14] text-[#18181b]">{section.heading}</h3>
+                                            <h3 className="text-[19px] font-semibold leading-[1.12] text-[#18181b]">{section.heading}</h3>
                                         </div>
-                                        <div className="space-y-1.5">
+                                        <div className={`${compactSectionDeck ? "space-y-2" : "space-y-1.5 overflow-hidden"} pl-2`}>
                                             {section.lines.map((line, lineIndex) => (
                                                 <p key={lineIndex} className={`${sectionTextClass} text-[#3f3f46]`}>
                                                     {line}
@@ -647,11 +664,10 @@ const VerbatimImportFallback = ({ data, density }: { data: any; density: string 
                                     </div>
                                 );
                             })}
-                        </div>
                     </div>
-                ) : family === "cover" ? (
-                    <div className="flex flex-1 items-center">
-                        <p className={`${bodyClass} max-w-[74%] whitespace-pre-line text-[#3f3f46]`}>
+                ) : isCoverSlide ? (
+                    <div className="flex flex-none items-start">
+                        <p className="max-w-[86%] whitespace-pre-line text-[clamp(28px,2.4vw,42px)] leading-[1.18] text-[#3f3f46]">
                             {body}
                         </p>
                     </div>

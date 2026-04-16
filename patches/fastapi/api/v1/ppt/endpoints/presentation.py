@@ -816,6 +816,48 @@ def _detect_numbered_structure(text: str) -> Dict[str, int]:
     }
 
 
+def _has_long_numbered_sections(text: str) -> bool:
+    title, _, body_lines = _split_slide_text(text)
+    numbered = _detect_numbered_structure(text)
+    if numbered["numbered_count"] < 3:
+        return False
+
+    current_heading = ""
+    current_lines: List[str] = []
+    sections: List[Dict[str, Any]] = []
+    for line in body_lines:
+        if re.match(r"^\s*\d{1,2}[\).]\s+", line):
+            if current_heading:
+                sections.append({"heading": current_heading, "lines": current_lines[:]})
+            current_heading = re.sub(r"^\s*\d{1,2}[\).]\s+", "", line).strip()
+            current_lines = []
+            continue
+        if current_heading:
+            current_lines.append(line.strip())
+
+    if current_heading:
+        sections.append({"heading": current_heading, "lines": current_lines[:]})
+
+    if len(sections) < 3:
+        return False
+
+    max_heading_length = max((len(section["heading"]) for section in sections), default=0)
+    max_line_count = max((len(section["lines"]) for section in sections), default=0)
+    total_section_lines = sum(len(section["lines"]) for section in sections)
+    total_section_chars = sum(
+        len(section["heading"]) + sum(len(line) for line in section["lines"])
+        for section in sections
+    )
+
+    return (
+        len(title) > 90
+        or max_heading_length > 88
+        or max_line_count >= 4
+        or total_section_lines >= 7
+        or total_section_chars >= 520
+    )
+
+
 def _is_short_section_divider(slide_text: str) -> bool:
     lines = _non_empty_lines(slide_text)
     if not lines:
@@ -1528,12 +1570,17 @@ def _layout_catalog_for_planner(
 
 def _slide_catalog_item(index: int, slide_text: str) -> Dict[str, Any]:
     text = _clean_verbatim_text(slide_text)
+    numbered = _detect_numbered_structure(text)
     return {
         "index": index,
         "family": _classify_verbatim_slide(text),
         "chars": len(text),
         "lines": len(_non_empty_lines(text)),
         "numeric_lines": _numeric_line_count(text),
+        "numbered_count": numbered["numbered_count"],
+        "structured_count": numbered["structured_count"],
+        "largest_section_ratio": round(_largest_section_ratio(text), 3),
+        "long_numbered_sections": _has_long_numbered_sections(text),
         "preview": text[:900],
     }
 
@@ -1655,9 +1702,11 @@ async def _plan_complex_verbatim_slide(
         "slide": _slide_catalog_item(slide_index, slide_text),
         "rules": [
             "Prefer layouts that visibly fill the slide without large empty decorative zones.",
+            "Avoid layouts that would create equal-height tall cards with only a small amount of text.",
             "Use chart layouts only for clear numeric series.",
             "Use KPI layouts only for short metric-heavy slides.",
             "Use dense text layouts for long academic text.",
+            "If the slide has three long numbered sections, prefer compact text-heavy layouts over decorative card grids.",
             "Avoid repeating the same layout as the previous slide if a safe alternative exists.",
         ],
         "candidate_layouts": _layout_catalog_for_planner(layout, allowed_indexes),
@@ -1977,7 +2026,6 @@ def _split_verbatim_slide_text(text: str) -> List[str]:
         ]
         if len(normalized_chunks) >= 2:
             return normalized_chunks
-
     density = _slide_text_density(text)
     if density < 1700 and len(body_lines) <= 14:
         return [text]
